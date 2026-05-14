@@ -1,72 +1,62 @@
-// src/utils/storage.js
-
 const STORAGE_KEY = 'text-iterator-data'
+
+const defaultRoot = () => ({
+  folders: [{ id: 'default', name: 'General', createdAt: new Date().toISOString() }],
+  projects: []
+})
+
+const normalize = (data) => {
+  const folders = Array.isArray(data?.folders) ? data.folders : []
+  const projects = Array.isArray(data?.projects) ? data.projects : []
+  if (!folders.some((f) => f.id === 'default')) {
+    folders.unshift({ id: 'default', name: 'General', createdAt: new Date().toISOString() })
+  }
+  return { folders, projects }
+}
 
 export function loadData() {
   try {
-    const data = localStorage.getItem(STORAGE_KEY)
-    if (data) {
-      return JSON.parse(data)
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) {
+      const defaults = defaultRoot()
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(defaults))
+      return defaults
     }
-  } catch (e) {
-    console.error('Failed to load data:', e)
+    return normalize(JSON.parse(raw))
+  } catch {
+    return defaultRoot()
   }
-  
-  // Initialize defaults
-  const defaultData = {
-    folders: [
-      { id: 'default', name: 'General', createdAt: new Date().toISOString() }
-    ],
-    projects: []
-  }
-  saveData(defaultData)
-  return defaultData
 }
 
 export function saveData(data) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  } catch (e) {
-    console.error('Failed to save data:', e)
-    alert('Storage full or unavailable. Could not save.')
+    const normalized = normalize(data)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized))
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, error: 'Storage full or unavailable. Could not save.' }
   }
-}
-
-export function getProjects() {
-  const data = loadData()
-  return data.projects
 }
 
 export function saveProject(project) {
   const data = loadData()
-  const index = data.projects.findIndex(p => p.id === project.id)
-  if (index >= 0) {
-    data.projects[index] = { ...project, updatedAt: new Date().toISOString() }
-  } else {
-    data.projects.push({ ...project, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
-  }
-  saveData(data)
-  return project
-}
+  const now = new Date().toISOString()
+  const idx = data.projects.findIndex((p) => p.id === project.id)
+  const nextProject = idx >= 0
+    ? { ...project, createdAt: data.projects[idx].createdAt || project.createdAt || now, updatedAt: now }
+    : { ...project, createdAt: project.createdAt || now, updatedAt: now }
 
-export function deleteProject(id) {
-  const data = loadData()
-  data.projects = data.projects.filter(p => p.id !== id)
-  saveData(data)
-}
+  if (idx >= 0) data.projects[idx] = nextProject
+  else data.projects.push(nextProject)
 
-export function getFolders() {
-  const data = loadData()
-  return data.folders
+  const result = saveData(data)
+  return result.ok ? { ok: true, project: nextProject } : result
 }
 
 export function saveFolder(folder) {
   const data = loadData()
-  const index = data.folders.findIndex(f => f.id === folder.id)
-  if (index >= 0) {
-    data.folders[index] = folder
-  } else {
-    data.folders.push(folder)
-  }
-  saveData(data)
+  const idx = data.folders.findIndex((f) => f.id === folder.id)
+  if (idx >= 0) data.folders[idx] = folder
+  else data.folders.push(folder)
+  return saveData(data)
 }
